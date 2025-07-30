@@ -121,6 +121,11 @@ export interface AppState extends UserState {
   generateRecommendations: () => Promise<DeFiRecommendation[]>
   createFusionOrder: (recommendation: DeFiRecommendation) => Promise<string>
   generateSocialPost: (tradeData: CompletedTrade) => Promise<SocialPost>
+  generateSocialImage: (tradeData: CompletedTrade, postText?: string) => Promise<{
+    imageData: string | null
+    format: string
+    description: string
+  }>
   
   // Current state
   currentRecommendations: DeFiRecommendation[]
