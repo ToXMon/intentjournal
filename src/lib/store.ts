@@ -37,6 +37,9 @@ export const useAppStore = create<AppState>()(
       },
       currentRecommendations: [],
       activeOrders: [],
+      tokenPrices: {},
+      swapQuotes: {},
+      oneInchHealthy: false,
       isLoading: false,
       error: null,
 
@@ -46,21 +49,50 @@ export const useAppStore = create<AppState>()(
         chainId: number,
         type: "wagmi" | "para" = "wagmi"
       ) => {
-        set((state) => ({
-          walletAddress: address,
-          connectedChain: chainId,
-          walletType: type,
-          error: null,
-          // If connecting Para wallet, also update Para state
-          ...(type === "para" && {
-            paraWallet: {
-              ...state.paraWallet,
-              isConnected: true,
-              address: address,
-              error: null,
-            },
-          }),
-        }));
+        set((state) => {
+          // Check if this is a different wallet address
+          const isDifferentWallet = state.walletAddress && state.walletAddress.toLowerCase() !== address.toLowerCase();
+          
+          // If switching to a different wallet, clear user-specific data
+          const clearedData = isDifferentWallet ? {
+            journalEntries: [],
+            embeddings: [],
+            tradeHistory: [],
+            currentRecommendations: [],
+            activeOrders: [],
+            // Keep global data like tokenPrices and preferences
+          } : {};
+
+          console.log('Setting wallet connection:', {
+            previousAddress: state.walletAddress,
+            newAddress: address,
+            isDifferentWallet,
+            clearingData: isDifferentWallet
+          });
+
+          return {
+            ...clearedData,
+            walletAddress: address,
+            connectedChain: chainId,
+            walletType: type,
+            error: null,
+            // If connecting Para wallet, also update Para state
+            ...(type === "para" && {
+              paraWallet: {
+                ...state.paraWallet,
+                isConnected: true,
+                address: address,
+                error: null,
+              },
+            }),
+          };
+        });
+
+        // Load wallet-specific data from localStorage
+        const currentState = get();
+        if (currentState.walletAddress) {
+          get().loadWalletData(currentState.walletAddress);
+        }
       },
 
       setParaWalletState: (
@@ -95,6 +127,10 @@ export const useAppStore = create<AppState>()(
             walletAddress: null,
             connectedChain: null,
             walletType: null,
+            // Clear all user-specific data when disconnecting
+            journalEntries: [],
+            embeddings: [],
+            tradeHistory: [],
             currentRecommendations: [],
             activeOrders: [],
             error: null,
@@ -135,6 +171,10 @@ export const useAppStore = create<AppState>()(
               walletAddress: null,
               connectedChain: null,
               walletType: null,
+              // Clear user-specific data when disconnecting
+              journalEntries: [],
+              embeddings: [],
+              tradeHistory: [],
               currentRecommendations: [],
               activeOrders: [],
             }),
@@ -142,12 +182,89 @@ export const useAppStore = create<AppState>()(
         });
       },
 
+      // Wallet-specific data management
+      loadWalletData: (walletAddress: string) => {
+        try {
+          const walletKey = `wallet_data_${walletAddress.toLowerCase()}`;
+          const storedData = localStorage.getItem(walletKey);
+          
+          if (storedData) {
+            const walletData = JSON.parse(storedData);
+            console.log('Loading wallet-specific data for:', walletAddress, walletData);
+            
+            set((state) => ({
+              journalEntries: walletData.journalEntries || [],
+              embeddings: walletData.embeddings || [],
+              tradeHistory: walletData.tradeHistory || [],
+              currentRecommendations: walletData.currentRecommendations || [],
+              activeOrders: walletData.activeOrders || [],
+            }));
+          } else {
+            console.log('No existing data found for wallet:', walletAddress);
+            // Ensure clean state for new wallet
+            set({
+              journalEntries: [],
+              embeddings: [],
+              tradeHistory: [],
+              currentRecommendations: [],
+              activeOrders: [],
+            });
+          }
+        } catch (error) {
+          console.error('Error loading wallet data:', error);
+          // Fallback to clean state
+          set({
+            journalEntries: [],
+            embeddings: [],
+            tradeHistory: [],
+            currentRecommendations: [],
+            activeOrders: [],
+          });
+        }
+      },
+
+      saveWalletData: (walletAddress: string) => {
+        try {
+          const state = get();
+          const walletKey = `wallet_data_${walletAddress.toLowerCase()}`;
+          
+          const walletData = {
+            journalEntries: state.journalEntries,
+            embeddings: state.embeddings,
+            tradeHistory: state.tradeHistory,
+            currentRecommendations: state.currentRecommendations,
+            activeOrders: state.activeOrders,
+            lastUpdated: new Date().toISOString(),
+          };
+          
+          localStorage.setItem(walletKey, JSON.stringify(walletData));
+          console.log('Saved wallet-specific data for:', walletAddress);
+        } catch (error) {
+          console.error('Error saving wallet data:', error);
+        }
+      },
+
       syncParaWalletState: () => {
         // This will be called by components to sync Para hook state with store
         // Implementation will be handled by the components using Para hooks
       },
 
+      // Initialize wallet data on app load
+      initializeWalletData: () => {
+        const state = get();
+        if (state.walletAddress) {
+          console.log('Initializing wallet data for:', state.walletAddress);
+          state.loadWalletData(state.walletAddress);
+        }
+      },
+
       addJournalEntry: async (content: string) => {
+        const state = get();
+        if (!state.walletAddress) {
+          console.error('Cannot add journal entry: no wallet connected');
+          return;
+        }
+
         const entry: JournalEntry = {
           id: generateId(),
           content,
@@ -160,6 +277,10 @@ export const useAppStore = create<AppState>()(
           isLoading: true,
           error: null,
         }));
+
+        // Save wallet-specific data immediately
+        const updatedState = get();
+        updatedState.saveWalletData(updatedState.walletAddress!);
 
         try {
           // Process with AI (will be implemented in Venice AI integration)
@@ -213,6 +334,12 @@ export const useAppStore = create<AppState>()(
             ],
             isLoading: false,
           }));
+
+          // Save wallet-specific data after processing
+          const updatedState = get();
+          if (updatedState.walletAddress) {
+            updatedState.saveWalletData(updatedState.walletAddress);
+          }
 
           console.log("✅ Successfully processed journal entry with AI");
         } catch (error) {
@@ -440,6 +567,12 @@ Be specific about WHY this recommendation matches their expressed interests and 
             isLoading: false,
           });
 
+          // Save wallet-specific data after generating recommendations
+          const updatedState = get();
+          if (updatedState.walletAddress) {
+            updatedState.saveWalletData(updatedState.walletAddress);
+          }
+
           console.log("✅ Successfully generated AI-powered recommendation");
           return [recommendation];
         } catch (error) {
@@ -641,6 +774,88 @@ Make it engaging and authentic!`,
         }
       },
 
+      // 1inch API Actions
+      fetchTokenPrice: async (tokenAddress: string, chainId?: number) => {
+        try {
+          const { oneInchAPI } = await import('@/utils/oneinch');
+          const currentChainId = chainId || get().connectedChain || 8453;
+          
+          const price = await oneInchAPI.getTokenPrice(tokenAddress, currentChainId);
+          
+          if (price) {
+            set((state) => ({
+              tokenPrices: {
+                ...state.tokenPrices,
+                [tokenAddress.toLowerCase()]: price,
+              },
+            }));
+          }
+          
+          return price;
+        } catch (error) {
+          console.error('Failed to fetch token price:', error);
+          return null;
+        }
+      },
+
+      fetchTokenPrices: async (tokenAddresses: string[], chainId?: number) => {
+        try {
+          const { oneInchAPI } = await import('@/utils/oneinch');
+          const currentChainId = chainId || get().connectedChain || 8453;
+          
+          const prices = await oneInchAPI.getTokenPrices(tokenAddresses, currentChainId);
+          
+          set((state) => ({
+            tokenPrices: {
+              ...state.tokenPrices,
+              ...prices,
+            },
+          }));
+          
+          return prices;
+        } catch (error) {
+          console.error('Failed to fetch token prices:', error);
+          return {};
+        }
+      },
+
+      fetchSwapQuote: async (params: import('@/types').OneInchSwapParams, chainId?: number) => {
+        try {
+          const { oneInchAPI } = await import('@/utils/oneinch');
+          const currentChainId = chainId || get().connectedChain || 8453;
+          
+          const quote = await oneInchAPI.getSwapQuote(params, currentChainId);
+          
+          if (quote) {
+            const quoteKey = `${params.src}_${params.dst}_${params.amount}`;
+            set((state) => ({
+              swapQuotes: {
+                ...state.swapQuotes,
+                [quoteKey]: quote,
+              },
+            }));
+          }
+          
+          return quote;
+        } catch (error) {
+          console.error('Failed to fetch swap quote:', error);
+          return null;
+        }
+      },
+
+      fetchSwapData: async (params: import('@/types').OneInchSwapParams, chainId?: number) => {
+        try {
+          const { oneInchAPI } = await import('@/utils/oneinch');
+          const currentChainId = chainId || get().connectedChain || 8453;
+          
+          const swapData = await oneInchAPI.getSwapData(params, currentChainId);
+          return swapData;
+        } catch (error) {
+          console.error('Failed to fetch swap data:', error);
+          return null;
+        }
+      },
+
       generateSocialImage: async (tradeData: CompletedTrade, postText?: string) => {
         set({ isLoading: true, error: null });
 
@@ -701,9 +916,10 @@ Make it engaging and authentic!`,
     {
       name: STORAGE_KEYS.USER_PREFERENCES,
       partialize: (state) => ({
-        journalEntries: state.journalEntries,
-        embeddings: state.embeddings,
-        tradeHistory: state.tradeHistory,
+        // Don't persist user-specific data globally - it's now handled per-wallet
+        // journalEntries: [], // Handled per-wallet
+        // embeddings: [], // Handled per-wallet
+        // tradeHistory: [], // Handled per-wallet
         preferences: state.preferences,
         // Persist Para wallet connection state
         paraWallet: {
@@ -717,6 +933,9 @@ Make it engaging and authentic!`,
         walletAddress: state.walletAddress,
         connectedChain: state.connectedChain,
         walletType: state.walletType,
+        // Persist 1inch data (with TTL handled by cache manager)
+        tokenPrices: state.tokenPrices,
+        oneInchHealthy: state.oneInchHealthy,
       }),
     }
   )
