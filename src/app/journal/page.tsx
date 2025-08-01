@@ -2,29 +2,53 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useAccount } from 'wagmi'
 import { WalletConnect } from '@/components/wallet-connect'
+import { AppNavigation } from '@/components/app-navigation'
+import { FlowBreadcrumb } from '@/components/flow-breadcrumb'
+import { WalletDataDebug } from '@/components/wallet-data-debug'
 import { useParaAccount } from '@/hooks/useParaAccount'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { useAppStore } from '@/lib/store'
+import { DeFiDashboard } from '@/components/defi-dashboard'
+import { TokenPriceFeed } from '@/components/token-price-feed'
 
 export default function JournalPage() {
   const router = useRouter()
+  
+  // Web3 wallet state
+  const { address: web3Address, isConnected: isWeb3Connected } = useAccount()
+  
+  // Para wallet state
   const { address: paraAddress, isConnected: paraConnected } = useParaAccount()
-  const { addJournalEntry, journalEntries, generateRecommendations } = useAppStore()
+  
+  // App store state (unified wallet state)
+  const { walletAddress, walletType, addJournalEntry, journalEntries, generateRecommendations } = useAppStore()
+  
   const [journalEntry, setJournalEntry] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const isConnected = paraConnected
-  const connectedAddress = paraAddress
+  // Determine connection status from multiple sources
+  const isConnected = walletType === 'para' ? paraConnected : isWeb3Connected
+  const connectedAddress = walletType === 'para' ? paraAddress : web3Address
+
+  // Also check the unified store state as fallback
+  const isUnifiedConnected = !!walletAddress
+  const unifiedAddress = walletAddress
+
+  // Use the most reliable connection state
+  const finalIsConnected = isConnected || isUnifiedConnected
+  const finalAddress = connectedAddress || unifiedAddress
 
   // Redirect to home if not connected
   useEffect(() => {
-    if (!isConnected) {
+    if (!finalIsConnected) {
+      console.log('No wallet connected, redirecting to home')
       router.push('/')
     }
-  }, [isConnected, router])
+  }, [finalIsConnected, router])
 
   const handleSubmitEntry = async () => {
     if (!journalEntry.trim()) return
@@ -46,7 +70,7 @@ export default function JournalPage() {
     }
   }
 
-  if (!isConnected) {
+  if (!finalIsConnected) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
         <div className="container mx-auto px-4 py-16">
@@ -66,6 +90,11 @@ export default function JournalPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
       <div className="container mx-auto px-4 py-8">
+        {/* Navigation Component */}
+        <AppNavigation />
+        
+        {/* Flow Breadcrumb */}
+        <FlowBreadcrumb />
         <header className="mb-8">
           <div className="flex justify-between items-center">
             <div>
@@ -77,6 +106,22 @@ export default function JournalPage() {
               </p>
             </div>
             <WalletConnect />
+          </div>
+          
+          {/* Navigation */}
+          <div className="flex gap-2 mt-4">
+            <Button 
+              variant="outline" 
+              onClick={() => router.push('/recommendations')}
+            >
+              View Recommendations
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={() => router.push('/dashboard')}
+            >
+              DeFi Dashboard
+            </Button>
           </div>
         </header>
 
@@ -103,7 +148,14 @@ export default function JournalPage() {
                   disabled={!journalEntry.trim() || isSubmitting}
                   className="flex-1"
                 >
-                  {isSubmitting ? 'Processing...' : 'Submit & Get Recommendations'}
+                  {isSubmitting ? (
+                    <div className="flex items-center gap-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Processing with AI...
+                    </div>
+                  ) : (
+                    'Submit & Get AI Recommendations'
+                  )}
                 </Button>
                 <Button 
                   variant="outline"
@@ -113,21 +165,41 @@ export default function JournalPage() {
                   Clear
                 </Button>
               </div>
-              <p className="text-xs text-gray-500">
-                Your entry will be processed with Venice AI to generate personalized DeFi recommendations.
-              </p>
+              {isSubmitting ? (
+                <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
+                  <div className="flex items-center gap-2 text-blue-800 dark:text-blue-200">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                    <div className="text-sm">
+                      <p className="font-medium">🧠 Venice AI is analyzing your entry...</p>
+                      <p className="text-xs mt-1">Creating embeddings and generating personalized recommendations</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500">
+                  Your entry will be processed with Venice AI to generate personalized DeFi recommendations based on your financial intentions.
+                </p>
+              )}
             </CardContent>
           </Card>
 
-          {/* Recent Entries Sidebar */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent Entries</CardTitle>
-              <CardDescription>
-                Your journal history
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+          {/* DeFi Dashboard Sidebar */}
+          <div className="space-y-4">
+            {/* Token Price Feed */}
+            <TokenPriceFeed compact={true} showHeader={false} defaultCategory="major" />
+            
+            {/* DeFi Dashboard */}
+            <DeFiDashboard compact={true} showHeader={false} />
+            
+            {/* Recent Entries */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Entries</CardTitle>
+                <CardDescription>
+                  Your journal history
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
               {journalEntries.length === 0 ? (
                 <div className="text-center py-8">
                   <p className="text-gray-500 text-sm mb-2">
@@ -148,9 +220,15 @@ export default function JournalPage() {
                         <p className="text-xs text-gray-500">
                           {new Date(entry.timestamp).toLocaleDateString()}
                         </p>
-                        {entry.processed && (
-                          <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
-                            Processed
+                        {entry.processed ? (
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-200 px-2 py-1 rounded flex items-center gap-1">
+                              🧠 AI Processed
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200 px-2 py-1 rounded">
+                            Processing...
                           </span>
                         )}
                       </div>
@@ -165,6 +243,7 @@ export default function JournalPage() {
               )}
             </CardContent>
           </Card>
+          </div>
         </div>
 
         {/* Quick Tips */}
@@ -196,6 +275,9 @@ export default function JournalPage() {
               </div>
             </CardContent>
           </Card>
+          
+          {/* Debug Component for Development */}
+          <WalletDataDebug />
         </div>
       </div>
     </div>

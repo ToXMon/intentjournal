@@ -2,35 +2,60 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useAccount } from 'wagmi'
 import { WalletConnect } from '@/components/wallet-connect'
+import { AppNavigation } from '@/components/app-navigation'
+import { FlowBreadcrumb } from '@/components/flow-breadcrumb'
 import { useParaAccount } from '@/hooks/useParaAccount'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useAppStore } from '@/lib/store'
 import { Share2, Twitter, Copy, Download, TrendingUp } from 'lucide-react'
+import { DeFiDashboard } from '@/components/defi-dashboard'
 
 export default function SharePage() {
   const router = useRouter()
+  
+  // Web3 wallet state
+  const { address: web3Address, isConnected: isWeb3Connected } = useAccount()
+  
+  // Para wallet state
   const { address: paraAddress, isConnected: paraConnected } = useParaAccount()
+  
+  // App store state (unified wallet state)
   const { 
+    walletAddress, 
+    walletType,
     activeOrders, 
     tradeHistory, 
     generateSocialPost,
     isLoading 
   } = useAppStore()
+  
   const [generatedPost, setGeneratedPost] = useState<string | null>(null)
   const [isGeneratingPost, setIsGeneratingPost] = useState(false)
   const [copiedText, setCopiedText] = useState<string | null>(null)
 
-  const isConnected = paraConnected
+  // Determine connection status from multiple sources
+  const isConnected = walletType === 'para' ? paraConnected : isWeb3Connected
+  const connectedAddress = walletType === 'para' ? paraAddress : web3Address
+
+  // Also check the unified store state as fallback
+  const isUnifiedConnected = !!walletAddress
+  const unifiedAddress = walletAddress
+
+  // Use the most reliable connection state
+  const finalIsConnected = isConnected || isUnifiedConnected
+  const finalAddress = connectedAddress || unifiedAddress
 
   // Redirect to home if not connected
   useEffect(() => {
-    if (!isConnected) {
+    if (!finalIsConnected) {
+      console.log('No wallet connected, redirecting to home')
       router.push('/')
     }
-  }, [isConnected, router])
+  }, [finalIsConnected, router])
 
   const handleGeneratePost = async (trade: any) => {
     setIsGeneratingPost(true)
@@ -59,7 +84,7 @@ export default function SharePage() {
     window.open(twitterUrl, '_blank')
   }
 
-  if (!isConnected) {
+  if (!finalIsConnected) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
         <div className="container mx-auto px-4 py-16">
@@ -79,6 +104,11 @@ export default function SharePage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
       <div className="container mx-auto px-4 py-8">
+        {/* Navigation Component */}
+        <AppNavigation />
+        
+        {/* Flow Breadcrumb */}
+        <FlowBreadcrumb />
         <header className="mb-8">
           <div className="flex justify-between items-center">
             <div>
@@ -108,6 +138,11 @@ export default function SharePage() {
             >
               New Journal Entry
             </Button>
+          </div>
+
+          {/* DeFi Dashboard */}
+          <div className="mb-8">
+            <DeFiDashboard compact={false} showHeader={true} defaultTab="activity" />
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">

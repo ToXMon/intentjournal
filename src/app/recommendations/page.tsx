@@ -2,34 +2,60 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useAccount } from 'wagmi'
 import { WalletConnect } from '@/components/wallet-connect'
+import { AppNavigation } from '@/components/app-navigation'
+import { FlowBreadcrumb } from '@/components/flow-breadcrumb'
 import { useParaAccount } from '@/hooks/useParaAccount'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useAppStore } from '@/lib/store'
 import { ArrowRight, TrendingUp, Shield, Clock } from 'lucide-react'
+import { OneInchProtocolSuite } from '@/components/oneinch-protocol-suite'
+import { DeFiDashboard } from '@/components/defi-dashboard'
 
 export default function RecommendationsPage() {
   const router = useRouter()
+  
+  // Web3 wallet state
+  const { address: web3Address, isConnected: isWeb3Connected } = useAccount()
+  
+  // Para wallet state
   const { address: paraAddress, isConnected: paraConnected } = useParaAccount()
+  
+  // App store state (unified wallet state)
   const { 
+    walletAddress, 
+    walletType,
     currentRecommendations, 
     createFusionOrder, 
     journalEntries,
     isLoading 
   } = useAppStore()
+  
   const [selectedRecommendation, setSelectedRecommendation] = useState<string | null>(null)
   const [isCreatingOrder, setIsCreatingOrder] = useState(false)
 
-  const isConnected = paraConnected
+  // Determine connection status from multiple sources
+  const isConnected = walletType === 'para' ? paraConnected : isWeb3Connected
+  const connectedAddress = walletType === 'para' ? paraAddress : web3Address
+
+  // Also check the unified store state as fallback
+  const isUnifiedConnected = !!walletAddress
+  const unifiedAddress = walletAddress
+
+  // Use the most reliable connection state
+  const finalIsConnected = isConnected || isUnifiedConnected
+  const finalAddress = connectedAddress || unifiedAddress
 
   // Redirect to home if not connected
   useEffect(() => {
-    if (!isConnected) {
+    if (!finalIsConnected) {
+      console.log('No wallet connected, redirecting to home')
       router.push('/')
     }
-  }, [isConnected, router])
+  }, [finalIsConnected, router])
 
   const handleCreateOrder = async (recommendation: any) => {
     if (!recommendation) return
@@ -51,7 +77,7 @@ export default function RecommendationsPage() {
     }
   }
 
-  if (!isConnected) {
+  if (!finalIsConnected) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
         <div className="container mx-auto px-4 py-16">
@@ -71,6 +97,11 @@ export default function RecommendationsPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
       <div className="container mx-auto px-4 py-8">
+        {/* Navigation Component */}
+        <AppNavigation />
+        
+        {/* Flow Breadcrumb */}
+        <FlowBreadcrumb />
         <header className="mb-8">
           <div className="flex justify-between items-center">
             <div>
@@ -96,10 +127,20 @@ export default function RecommendationsPage() {
             </Button>
             <Button 
               variant="outline" 
-              onClick={() => router.push('/share')}
+              onClick={() => router.push('/dashboard')}
             >
-              View Trades
+              DeFi Dashboard
             </Button>
+          </div>
+
+          {/* DeFi Dashboard */}
+          <div className="mb-8">
+            <DeFiDashboard compact={false} showHeader={true} defaultTab="overview" />
+          </div>
+
+          {/* 1inch Protocol Suite */}
+          <div className="mb-8">
+            <OneInchProtocolSuite />
           </div>
 
           {isLoading ? (
