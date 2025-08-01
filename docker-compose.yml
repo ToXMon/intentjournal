@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  intentjournal-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_VENICE_API_KEY=${NEXT_PUBLIC_VENICE_API_KEY}
+        - NEXT_PUBLIC_ONEINCH_API_KEY=${NEXT_PUBLIC_ONEINCH_API_KEY}
+        - NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=${NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID}
+        - NEXT_PUBLIC_PARA_API_KEY=${NEXT_PUBLIC_PARA_API_KEY}
+        - NEXT_PUBLIC_BASE_SEPOLIA_RPC=${NEXT_PUBLIC_BASE_SEPOLIA_RPC:-https://sepolia.base.org}
+        - NEXT_PUBLIC_ETHERLINK_RPC=${NEXT_PUBLIC_ETHERLINK_RPC:-https://node.ghostnet.etherlink.com}
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+      
+      # API Keys (set these in .env file)
+      - NEXT_PUBLIC_VENICE_API_KEY=${NEXT_PUBLIC_VENICE_API_KEY}
+      - NEXT_PUBLIC_ONEINCH_API_KEY=${NEXT_PUBLIC_ONEINCH_API_KEY}
+      - NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=${NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID}
+      - NEXT_PUBLIC_PARA_API_KEY=2d0a70fd7a593dfe5f027763590ac8ac
+      
+      # RPC URLs
+      - NEXT_PUBLIC_BASE_SEPOLIA_RPC=https://sepolia.base.org
+      - NEXT_PUBLIC_ETHERLINK_RPC=https://node.ghostnet.etherlink.com
+      
+      # Performance
+      - NEXT_TELEMETRY_DISABLED=1
+      - GENERATE_SOURCEMAP=false
+    
+    volumes:
+      - app_cache:/app/.next/cache
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    restart: unless-stopped
+    
+    # Resource limits for local testing
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+volumes:
+  app_cache:
+    driver: local

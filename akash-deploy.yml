@@ -1,0 +1,54 @@
+---
+version: "2.0"
+services:
+  intentjournal-app:
+    image: wijnaldum/intentjournal-plus:latest
+    expose:
+      - port: 3000
+        as: 80
+        accept:
+          - intentjournal.tolushekoni.tech
+        to:
+          - global: true
+    env:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+      - NEXT_PUBLIC_VENICE_API_KEY=8scXz1KGI1ufAdhem8dUxGv-bgKeG1i0-wcEbXaYDQ
+      - NEXT_PUBLIC_ONEINCH_AUTH_KEY=mnqVbMu6DjbSAYPj8xzHVsrb51Cq5eqy
+      - ONEINCH_AUTH_KEY=mnqVbMu6DjbSAYPj8xzHVsrb51Cq5eqy
+      - NEXT_PUBLIC_PARA_API_KEY=2d0a70fd7a593dfe5f027763590ac8ac
+      - NEXT_PUBLIC_PARA_SECRET_KEY=sk_beta_8dad16ee4dbeee42b1f9c57d836b52cf
+      - NEXT_PUBLIC_PRIVY_APP_ID=cmdohoduh00gri80ju9o532j5
+      - NEXT_PUBLIC_ALCHEMY_KEY=3cKACjrE0GPeKXhBctq-E
+      - NEXT_PUBLIC_ALCHEMY_API_KEY_BASE=https://base-sepolia.g.alchemy.com/v2/3cKACjrE0GPeKXhBctq-E
+      - NEXT_PUBLIC_BASE_SEPOLIA_RPC=https://sepolia.base.org
+      - BASE_SEPOLIA_RPC=https://sepolia.base.org
+      - NEXT_PUBLIC_ETHERLINK_RPC=https://node.ghostnet.etherlink.com
+      - ETHERLINK_RPC=https://node.ghostnet.etherlink.com
+      - CDP_API=d5b12a3e-0b9a-4fda-bbc5-c7691abdd1f5
+      - CDP_SECRET=NJ+Fwh/eL88pHFCDuyyYyoI/Rp32OWEd2pJzU9b7T+wtvxf6Hs7FpBpsxUVBL9203VX2mgDCYptZtwy2fneHTA==
+      - NEXT_TELEMETRY_DISABLED=1
+      - GENERATE_SOURCEMAP=false
+profiles:
+  compute:
+    intentjournal-app:
+      resources:
+        cpu:
+          units: 1
+        memory:
+          size: 1Gi
+        storage:
+          - size: 2Gi
+  placement:
+    akash:
+      pricing:
+        intentjournal-app:
+          denom: uakt
+          amount: 1000
+
+deployment:
+  intentjournal-app:
+    akash:
+      profile: intentjournal-app
+      count: 1
