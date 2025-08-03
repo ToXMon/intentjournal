@@ -1,0 +1,46 @@
+{
+  "version": 2,
+  "name": "intentjournal-plus",
+  "buildCommand": "npm run build",
+  "installCommand": "npm install --legacy-peer-deps",
+  "routes": [
+    {
+      "src": "/api/1inch/(.*)",
+      "dest": "/api/1inch/$1"
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production",
+    "USE_REAL_TIME_DATA": "true",
+    "FORCE_MOCK_DATA": "false"
+  },
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, PUT, DELETE, OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Content-Type, Authorization, X-API-Key, Accept"
+        },
+        {
+          "key": "Access-Control-Max-Age",
+          "value": "86400"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/1inch-api/(.*)",
+      "destination": "/api/1inch/$1"
+    }
+  ]
+}

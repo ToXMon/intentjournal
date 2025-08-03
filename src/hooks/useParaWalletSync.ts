@@ -15,7 +15,7 @@ export function useParaWalletSync() {
     const newParaState = {
       isConnected,
       address: address || null,
-      authMethod: account?.authMethod || null,
+      authMethod: (account as any)?.authMethod || null,
       walletIds: Array.isArray(wallets) ? wallets.map(w => w.id || w.walletId || w.address) : null,
       isLoading,
       error: error?.message || null,

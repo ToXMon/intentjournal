@@ -1,5 +1,14 @@
 import * as React from "react"
-import { Slot } from "@radix-ui/react-slot"
+// Simple Slot replacement
+const Slot = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLElement> & { children?: React.ReactNode }>(
+  ({ children, ...props }, ref) => {
+    if (React.isValidElement(children)) {
+      return React.cloneElement(children, { ...props, ref } as any)
+    }
+    return <span {...props} ref={ref as any}>{children}</span>
+  }
+)
+Slot.displayName = "Slot"
 import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"

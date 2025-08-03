@@ -1,0 +1,9 @@
+{
+  "network": "etherlink-testnet",
+  "chainId": 128123,
+  "contractAddress": "0x6CE3d4bf7C7140924C6AB7579b8B86Dc9ebF7a02",
+  "deployerAddress": "0xce9B692A01D47054e9ebC15722c071cbc4BE714e",
+  "timestamp": "2025-08-02T06:56:09.348Z",
+  "rpcUrl": "https://node.ghostnet.etherlink.com",
+  "explorerUrl": "https://testnet-explorer.etherlink.com"
+}

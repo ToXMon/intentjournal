@@ -10,3 +10,8 @@ README.md
 .vercel
 .DS_Store
 *.tsbuildinfo
+# Exclude contracts directory from Docker build
+contracts/
+contracts/**
+# Keep the addresses.json file for frontend
+!src/contracts/addresses.json

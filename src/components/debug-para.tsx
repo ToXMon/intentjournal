@@ -40,8 +40,8 @@ export function DebugPara() {
       setDebugInfo(prev => prev + `✓ Server Secret Key: ${serverSecretKey ? `${serverSecretKey.slice(0, 8)}...` : "NOT SET (expected on client)"}\n`);
       
       // List available methods for debugging
-      const methods = Object.getOwnPropertyNames(para).filter(prop => typeof para[prop] === 'function');
-      const prototypeMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(para)).filter(prop => typeof para[prop] === 'function');
+      const methods = Object.getOwnPropertyNames(para).filter(prop => typeof (para as any)[prop] === 'function');
+      const prototypeMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(para)).filter(prop => typeof (para as any)[prop] === 'function');
       console.log("Available Para methods:", methods);
       console.log("Available Para prototype methods:", prototypeMethods);
       setDebugInfo(prev => prev + `✓ Instance methods: ${methods.join(', ')}\n`);
@@ -66,7 +66,7 @@ export function DebugPara() {
       setDebugInfo(prev => prev + "\n=== OAUTH METHODS TEST ===\n");
       const oauthMethods = ['verifyOAuth', 'waitForWalletCreation', 'waitForLogin', 'logout'];
       oauthMethods.forEach(method => {
-        const available = typeof para[method] === 'function';
+        const available = typeof (para as any)[method] === 'function';
         setDebugInfo(prev => prev + `${available ? '✓' : '✗'} ${method}: ${available ? 'Available' : 'Not found'}\n`);
       });
       

@@ -1,9 +1,11 @@
 /**
- * 1inch Data APIs Integration
+ * 1inch Data APIs Integration - REAL API VERSION
  * Comprehensive data fetching for Balances, Prices, Metadata, and Transaction History
+ * Now with real API integration!
  */
 
 import { CacheManager } from './cache';
+import { realOneInchApi, COMMON_TOKEN_ADDRESSES } from './real-api-service';
 
 export interface TokenPrice {
   address: string;
@@ -56,12 +58,16 @@ export interface TransactionItem {
 }
 
 export interface TransactionHistory {
-  address: string;
-  chainId: number;
   transactions: TransactionItem[];
   totalCount: number;
   hasMore: boolean;
-  lastUpdated: number;
+}
+
+export interface WalletData {
+  balances: Record<string, string>;
+  prices: Record<string, TokenPrice>;
+  metadata: Record<string, TokenMetadata>;
+  history: TransactionHistory | null;
 }
 
 export interface PriceChartData {
@@ -71,30 +77,20 @@ export interface PriceChartData {
 }
 
 export class OneInchDataAPI {
-  private rateLimitDelay = 1000; // 1 second between requests
-  private lastRequestTime = 0;
+  private baseUrl = '/api/1inch';
 
-  private async makeRequest(url: string, options: RequestInit = {}): Promise<any> {
-    // Rate limiting
-    const now = Date.now();
-    const timeSinceLastRequest = now - this.lastRequestTime;
-    if (timeSinceLastRequest < this.rateLimitDelay) {
-      await new Promise(resolve => 
-        setTimeout(resolve, this.rateLimitDelay - timeSinceLastRequest)
-      );
-    }
-    this.lastRequestTime = Date.now();
+  constructor() {
+    console.log('🚀 OneInchDataAPI initialized with REAL API integration');
+  }
 
-    const headers = {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-      ...options.headers,
-    };
-
+  private async makeRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
     try {
-      const response = await fetch(url, {
+      const response = await fetch(`${this.baseUrl}${endpoint}`, {
         ...options,
-        headers,
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
       });
 
       if (!response.ok) {
@@ -112,7 +108,7 @@ export class OneInchDataAPI {
   }
 
   /**
-   * Get token prices for multiple tokens
+   * Get token prices for multiple tokens - Now with REAL API integration!
    */
   async getTokenPrices(
     chainId: number,
@@ -127,77 +123,82 @@ export class OneInchDataAPI {
     }
 
     try {
-      console.log('📊 Fetching token prices for chain:', chainId);
+      console.log('🚀 Attempting REAL 1inch API for token prices on chain:', chainId);
       
-      // Build query parameters
-      const params = new URLSearchParams();
-      if (tokenAddresses && tokenAddresses.length > 0) {
-        params.append('tokens', tokenAddresses.join(','));
+      // Try real API first
+      try {
+        const realPrices = await realOneInchApi.getTokenPrices(chainId, tokenAddresses);
+        
+        // Enhance with token metadata if we have it
+        const enhancedPrices: Record<string, TokenPrice> = {};
+        for (const [address, price] of Object.entries(realPrices)) {
+          enhancedPrices[address] = {
+            ...price,
+            symbol: this.getTokenSymbol(address, chainId) || price.symbol,
+          };
+        }
+        
+        console.log(`✅ REAL API SUCCESS: Retrieved ${Object.keys(enhancedPrices).length} token prices`);
+        
+        // Cache for 1 minute
+        CacheManager.set(cacheKey, enhancedPrices, 60 * 1000);
+        return enhancedPrices;
+      } catch (realApiError) {
+        console.warn('⚠️ Real API failed, falling back to proxy:', realApiError);
+        
+        // Fallback to proxy/mock
+        const params = new URLSearchParams();
+        if (tokenAddresses && tokenAddresses.length > 0) {
+          params.append('tokens', tokenAddresses.join(','));
+        }
+        params.append('currency', currency);
+        
+        const url = `/prices/${chainId}?${params.toString()}`;
+        const data = await this.makeRequest(url);
+
+        // Transform the response into our format
+        const prices: Record<string, TokenPrice> = {};
+        
+        Object.entries(data.prices || data || {}).forEach(([address, priceValue]: [string, any]) => {
+          // Handle both string prices (real API) and object prices (mock data)
+          let processedPrice: TokenPrice;
+          
+          if (typeof priceValue === 'string' || typeof priceValue === 'number') {
+            // Real 1inch API returns just price values as strings/numbers
+            const priceStr = priceValue.toString();
+            processedPrice = {
+              address: address.toLowerCase(),
+              symbol: this.getTokenSymbol(address, chainId) || 'UNKNOWN',
+              price: priceStr,
+              priceUSD: priceStr,
+              change24h: undefined,
+              volume24h: undefined,
+              marketCap: undefined,
+              lastUpdated: Date.now(),
+            };
+          } else {
+            // Mock data format with full objects
+            processedPrice = {
+              address: address.toLowerCase(),
+              symbol: priceValue.symbol || this.getTokenSymbol(address, chainId) || 'UNKNOWN',
+              price: priceValue.price || '0',
+              priceUSD: priceValue.priceUSD || priceValue.price || '0',
+              change24h: priceValue.change24h,
+              volume24h: priceValue.volume24h,
+              marketCap: priceValue.marketCap,
+              lastUpdated: Date.now(),
+            };
+          }
+          
+          prices[address.toLowerCase()] = processedPrice;
+        });
+
+        // Cache for 1 minute
+        CacheManager.set(cacheKey, prices, 60 * 1000);
+        
+        console.log(`✅ Retrieved ${Object.keys(prices).length} token prices via fallback`);
+        return prices;
       }
-      params.append('currency', currency);
-      
-      const url = `/api/1inch/prices/${chainId}?${params.toString()}`;
-      const data = await this.makeRequest(url);
-
-      // Transform the response into our format
-      const prices: Record<string, TokenPrice> = {};
-      
-      // Debug logging
-      console.log('🔍 Raw API response data:', {
-        dataKeys: Object.keys(data),
-        pricesKeys: data.prices ? Object.keys(data.prices).slice(0, 5) : 'no prices',
-        samplePrice: data.prices ? Object.values(data.prices)[0] : 'no sample'
-      });
-      
-      Object.entries(data.prices || {}).forEach(([address, priceValue]: [string, any]) => {
-        // Handle both string prices (real API) and object prices (mock data)
-        let processedPrice: TokenPrice;
-        
-        if (typeof priceValue === 'string' || typeof priceValue === 'number') {
-          // Real 1inch API returns just price values as strings/numbers
-          const priceStr = priceValue.toString();
-          processedPrice = {
-            address: address.toLowerCase(),
-            symbol: 'UNKNOWN', // We'll need to get this from token metadata
-            price: priceStr,
-            priceUSD: priceStr,
-            change24h: undefined,
-            volume24h: undefined,
-            marketCap: undefined,
-            lastUpdated: Date.now(),
-          };
-        } else {
-          // Mock data format with full objects
-          processedPrice = {
-            address: address.toLowerCase(),
-            symbol: priceValue.symbol || 'UNKNOWN',
-            price: priceValue.price || '0',
-            priceUSD: priceValue.priceUSD || priceValue.price || '0',
-            change24h: priceValue.change24h,
-            volume24h: priceValue.volume24h,
-            marketCap: priceValue.marketCap,
-            lastUpdated: Date.now(),
-          };
-        }
-        
-        prices[address.toLowerCase()] = processedPrice;
-        
-        // Debug log for ETH specifically
-        if (address.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee') {
-          console.log('🔍 Processing ETH price:', {
-            originalAddress: address,
-            lowercaseAddress: address.toLowerCase(),
-            originalPriceValue: priceValue,
-            processedPrice
-          });
-        }
-      });
-
-      // Cache for 1 minute
-      CacheManager.set(cacheKey, prices, 60 * 1000);
-      
-      console.log(`✅ Successfully fetched ${Object.keys(prices).length} token prices`);
-      return prices;
     } catch (error) {
       console.error('Failed to fetch token prices:', error);
       return {};
@@ -205,7 +206,7 @@ export class OneInchDataAPI {
   }
 
   /**
-   * Get token metadata
+   * Get token metadata - Now with REAL API integration!
    */
   async getTokenMetadata(
     chainId: number,
@@ -219,47 +220,67 @@ export class OneInchDataAPI {
     }
 
     try {
-      console.log('📊 Fetching token metadata for chain:', chainId);
+      console.log('🚀 Attempting REAL 1inch API for token metadata on chain:', chainId);
       
-      // Build query parameters
-      const params = new URLSearchParams();
-      if (tokenAddresses && tokenAddresses.length > 0) {
-        params.append('addresses', tokenAddresses.join(','));
-      }
-      
-      const url = `/api/1inch/tokens/${chainId}?${params.toString()}`;
-      const data = await this.makeRequest(url);
-
-      // Transform the response into our format
-      const metadata: Record<string, TokenMetadata> = {};
-      
-      // Ensure data.tokens is an array before calling forEach
-      const tokens = Array.isArray(data.tokens) ? data.tokens : [];
-      
-      tokens.forEach((token: any) => {
-        if (token && token.address) {
-          metadata[token.address.toLowerCase()] = {
-            address: token.address.toLowerCase(),
-            symbol: token.symbol || 'UNKNOWN',
-            name: token.name || 'Unknown Token',
-            decimals: token.decimals || 18,
-            logoURI: token.logoURI,
-            tags: Array.isArray(token.tags) ? token.tags : [],
-            description: token.description,
-            website: token.website,
-            twitter: token.twitter,
-            coingeckoId: token.coingeckoId,
-            isFoT: token.isFoT || false,
-            synth: token.synth || false,
-          };
+      // Try real API first
+      try {
+        const realMetadata = await realOneInchApi.getTokenList(chainId);
+        
+        // Filter by requested addresses if provided
+        let filteredMetadata = realMetadata;
+        if (tokenAddresses && tokenAddresses.length > 0) {
+          filteredMetadata = {};
+          for (const address of tokenAddresses) {
+            const lowerAddress = address.toLowerCase();
+            if (realMetadata[lowerAddress]) {
+              filteredMetadata[lowerAddress] = realMetadata[lowerAddress];
+            }
+          }
         }
-      });
+        
+        console.log(`✅ REAL API SUCCESS: Retrieved ${Object.keys(filteredMetadata).length} token metadata`);
+        
+        // Cache for 5 minutes
+        CacheManager.set(cacheKey, filteredMetadata, 5 * 60 * 1000);
+        return filteredMetadata;
+      } catch (realApiError) {
+        console.warn('⚠️ Real API failed, falling back to proxy:', realApiError);
+        
+        // Fallback to proxy/mock
+        const params = new URLSearchParams();
+        if (tokenAddresses && tokenAddresses.length > 0) {
+          params.append('addresses', tokenAddresses.join(','));
+        }
+        
+        const url = `/tokens/${chainId}?${params.toString()}`;
+        const data = await this.makeRequest(url);
 
-      // Cache for 5 minutes
-      CacheManager.set(cacheKey, metadata, 5 * 60 * 1000);
-      
-      console.log(`✅ Successfully fetched ${Object.keys(metadata).length} token metadata entries`);
-      return metadata;
+        // Transform the response into our format
+        const metadata: Record<string, TokenMetadata> = {};
+        
+        Object.entries(data.tokens || data || {}).forEach(([address, tokenData]: [string, any]) => {
+          metadata[address.toLowerCase()] = {
+            address: address.toLowerCase(),
+            symbol: tokenData.symbol,
+            name: tokenData.name,
+            decimals: tokenData.decimals,
+            logoURI: tokenData.logoURI,
+            tags: tokenData.tags,
+            description: tokenData.description,
+            website: tokenData.website,
+            twitter: tokenData.twitter,
+            coingeckoId: tokenData.coingeckoId,
+            isFoT: tokenData.isFoT,
+            synth: tokenData.synth,
+          };
+        });
+
+        // Cache for 5 minutes
+        CacheManager.set(cacheKey, metadata, 5 * 60 * 1000);
+        
+        console.log(`✅ Retrieved ${Object.keys(metadata).length} token metadata via fallback`);
+        return metadata;
+      }
     } catch (error) {
       console.error('Failed to fetch token metadata:', error);
       return {};
@@ -267,7 +288,102 @@ export class OneInchDataAPI {
   }
 
   /**
-   * Get transaction history for an address
+   * Get wallet balances - Now with REAL API integration!
+   */
+  async getWalletBalances(
+    chainId: number,
+    walletAddress: string
+  ): Promise<Record<string, string>> {
+    try {
+      console.log('🚀 Attempting REAL 1inch API for wallet balances:', walletAddress);
+      
+      // Try real API first
+      try {
+        const realBalances = await realOneInchApi.getTokenBalances(chainId, walletAddress);
+        
+        console.log(`✅ REAL API SUCCESS: Retrieved balances for ${Object.keys(realBalances).length} tokens`);
+        return realBalances;
+      } catch (realApiError) {
+        console.warn('⚠️ Real API failed, falling back to proxy:', realApiError);
+        
+        // Fallback to proxy
+        const url = `/balance/${chainId}/${walletAddress}`;
+        const data = await this.makeRequest(url);
+        
+        console.log(`✅ Retrieved balances via fallback`);
+        return data || {};
+      }
+    } catch (error) {
+      console.error('Failed to fetch wallet balances:', error);
+      return {};
+    }
+  }
+
+  /**
+   * Get swap quote - Now with REAL API integration!
+   */
+  async getSwapQuote(params: {
+    chainId: number;
+    src: string;
+    dst: string;
+    amount: string;
+    from: string;
+    slippage?: number;
+  }): Promise<any> {
+    try {
+      console.log('🚀 Attempting REAL 1inch API for swap quote');
+      
+      // Try real API first
+      try {
+        const realQuote = await realOneInchApi.getSwapQuote(params);
+        
+        console.log(`✅ REAL API SUCCESS: Retrieved swap quote`);
+        return realQuote;
+      } catch (realApiError) {
+        console.warn('⚠️ Real API failed, falling back to proxy:', realApiError);
+        
+        // Fallback to proxy
+        const queryParams = new URLSearchParams({
+          src: params.src,
+          dst: params.dst,
+          amount: params.amount,
+          from: params.from,
+          slippage: (params.slippage || 1).toString(),
+        });
+        
+        const url = `/swap/${params.chainId}/quote?${queryParams.toString()}`;
+        const data = await this.makeRequest(url);
+        
+        console.log(`✅ Retrieved swap quote via fallback`);
+        return data;
+      }
+    } catch (error) {
+      console.error('Failed to get swap quote:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Helper method to get token symbol from known addresses
+   */
+  private getTokenSymbol(address: string, chainId: number): string | undefined {
+    const lowerAddress = address.toLowerCase();
+    const chainTokens = COMMON_TOKEN_ADDRESSES[chainId as keyof typeof COMMON_TOKEN_ADDRESSES];
+    
+    if (!chainTokens) return undefined;
+    
+    // Find symbol by address
+    for (const [symbol, tokenAddress] of Object.entries(chainTokens)) {
+      if (tokenAddress.toLowerCase() === lowerAddress) {
+        return symbol;
+      }
+    }
+    
+    return undefined;
+  }
+
+  /**
+   * Get transaction history for a wallet address
    */
   async getTransactionHistory(
     address: string,
@@ -279,7 +395,7 @@ export class OneInchDataAPI {
     } = {}
   ): Promise<TransactionHistory | null> {
     const { limit = 50, offset = 0, timeframe = '7d' } = options;
-    const cacheKey = `history_${chainId}_${address.toLowerCase()}_${limit}_${offset}_${timeframe}`;
+    const cacheKey = `history_${chainId}_${address}_${limit}_${offset}_${timeframe}`;
     const cached = CacheManager.get<TransactionHistory>(cacheKey);
     if (cached) {
       console.log('📊 Using cached transaction history for:', address);
@@ -287,7 +403,7 @@ export class OneInchDataAPI {
     }
 
     try {
-      console.log('📊 Fetching transaction history for:', address, 'on chain:', chainId);
+      console.log('📊 Fetching transaction history for:', address);
       
       // Build query parameters
       const params = new URLSearchParams();
@@ -295,45 +411,36 @@ export class OneInchDataAPI {
       params.append('offset', offset.toString());
       params.append('timeframe', timeframe);
       
-      const url = `/api/1inch/history/${chainId}/${address}?${params.toString()}`;
+      const url = `/history/${chainId}/${address}?${params.toString()}`;
       const data = await this.makeRequest(url);
 
       // Transform the response into our format
+      const transactions: TransactionItem[] = (data.transactions || []).map((tx: any) => ({
+        txHash: tx.txHash || tx.hash,
+        blockNumber: tx.blockNumber,
+        timestamp: tx.timestamp,
+        from: tx.from,
+        to: tx.to,
+        value: tx.value,
+        gasUsed: tx.gasUsed,
+        gasPrice: tx.gasPrice,
+        status: tx.status === 'success' ? 'success' : 'failed',
+        tokenIn: tx.tokenIn,
+        tokenOut: tx.tokenOut,
+        protocol: tx.protocol || '1inch',
+        type: this.determineTransactionType(tx),
+      }));
+
       const history: TransactionHistory = {
-        address: address.toLowerCase(),
-        chainId,
-        transactions: Array.isArray(data.transactions) ? data.transactions.map((tx: any) => ({
-          txHash: tx.txHash || tx.hash,
-          blockNumber: tx.blockNumber || 0,
-          timestamp: tx.timestamp || Date.now() / 1000,
-          from: tx.from?.toLowerCase() || '',
-          to: tx.to?.toLowerCase() || '',
-          value: tx.value || '0',
-          gasUsed: tx.gasUsed || '0',
-          gasPrice: tx.gasPrice || '0',
-          status: tx.status === 1 || tx.status === 'success' ? 'success' : 'failed',
-          tokenIn: tx.tokenIn ? {
-            address: tx.tokenIn.address?.toLowerCase() || '',
-            symbol: tx.tokenIn.symbol || 'UNKNOWN',
-            amount: tx.tokenIn.amount || '0',
-          } : undefined,
-          tokenOut: tx.tokenOut ? {
-            address: tx.tokenOut.address?.toLowerCase() || '',
-            symbol: tx.tokenOut.symbol || 'UNKNOWN',
-            amount: tx.tokenOut.amount || '0',
-          } : undefined,
-          protocol: tx.protocol || '1inch',
-          type: this.determineTransactionType(tx),
-        })) : [],
-        totalCount: data.totalCount || 0,
-        hasMore: data.hasMore || false,
-        lastUpdated: Date.now(),
+        transactions,
+        totalCount: data.totalCount || transactions.length,
+        hasMore: data.hasMore || transactions.length === limit,
       };
 
       // Cache for 2 minutes
       CacheManager.set(cacheKey, history, 2 * 60 * 1000);
       
-      console.log(`✅ Successfully fetched ${history.transactions.length} transactions`);
+      console.log(`✅ Retrieved ${transactions.length} transactions`);
       return history;
     } catch (error) {
       console.error('Failed to fetch transaction history:', error);
@@ -342,40 +449,30 @@ export class OneInchDataAPI {
   }
 
   /**
-   * Get comprehensive wallet data (balances + prices + metadata)
+   * Get comprehensive wallet data (balances, prices, metadata, history)
    */
   async getWalletData(
     address: string,
     chainId: number
-  ): Promise<{
-    balances: any;
-    prices: Record<string, TokenPrice>;
-    metadata: Record<string, TokenMetadata>;
-    history: TransactionHistory | null;
-  }> {
+  ): Promise<WalletData> {
     try {
-      console.log('📊 Fetching comprehensive wallet data for:', address);
-
-      // Fetch balances first to get token addresses
-      const balancesResponse = await fetch(`/api/1inch/balance/${chainId}/${address}`);
-      const balances = balancesResponse.ok ? await balancesResponse.json() : null;
-
-      // Extract token addresses from balances
-      const tokenAddresses = balances?.tokens ? Object.keys(balances.tokens) : [];
-
-      // Fetch prices, metadata, and history in parallel with individual error handling
-      const [pricesResult, metadataResult, historyResult] = await Promise.allSettled([
-        this.getTokenPrices(chainId, tokenAddresses),
-        this.getTokenMetadata(chainId, tokenAddresses),
-        this.getTransactionHistory(address, chainId, { limit: 20 }),
+      console.log('🚀 Fetching comprehensive wallet data for:', address);
+      
+      // Fetch all data in parallel
+      const [balancesResult, pricesResult, metadataResult, historyResult] = await Promise.allSettled([
+        this.getWalletBalances(chainId, address),
+        this.getTokenPrices(chainId),
+        this.getTokenMetadata(chainId),
+        this.getTransactionHistory(address, chainId, { limit: 10 })
       ]);
 
-      const prices: Record<string, TokenPrice> = pricesResult.status === 'fulfilled' ? pricesResult.value : {};
-      const metadata: Record<string, TokenMetadata> = metadataResult.status === 'fulfilled' ? metadataResult.value : {};
-      const history: TransactionHistory | null = historyResult.status === 'fulfilled' ? historyResult.value : null;
+      const balances = balancesResult.status === 'fulfilled' ? balancesResult.value : {};
+      const prices = pricesResult.status === 'fulfilled' ? pricesResult.value : {};
+      const metadata = metadataResult.status === 'fulfilled' ? metadataResult.value : {};
+      const history = historyResult.status === 'fulfilled' ? historyResult.value : null;
 
       console.log('✅ Successfully fetched comprehensive wallet data');
-
+      
       return {
         balances,
         prices,
@@ -383,9 +480,9 @@ export class OneInchDataAPI {
         history,
       };
     } catch (error) {
-      console.error('Failed to fetch comprehensive wallet data:', error);
+      console.error('Failed to fetch wallet data:', error);
       return {
-        balances: null,
+        balances: {},
         prices: {},
         metadata: {},
         history: null,
@@ -394,7 +491,7 @@ export class OneInchDataAPI {
   }
 
   /**
-   * Generate mock price chart data for demonstration
+   * Generate mock price chart data for testing
    */
   generateMockPriceChart(
     basePrice: number,
@@ -402,45 +499,46 @@ export class OneInchDataAPI {
   ): PriceChartData[] {
     const data: PriceChartData[] = [];
     const now = Date.now();
-    const dayMs = 24 * 60 * 60 * 1000;
+    const interval = (days * 24 * 60 * 60 * 1000) / 100; // 100 data points
 
-    for (let i = days; i >= 0; i--) {
-      const timestamp = now - (i * dayMs);
+    for (let i = 0; i < 100; i++) {
+      const timestamp = now - (days * 24 * 60 * 60 * 1000) + (i * interval);
       const volatility = 0.1; // 10% volatility
-      const randomChange = (Math.random() - 0.5) * 2 * volatility;
-      const price = basePrice * (1 + randomChange);
-      const volume = Math.random() * 1000000; // Random volume
-
+      const change = (Math.random() - 0.5) * volatility;
+      const price = basePrice * (1 + change);
+      
       data.push({
         timestamp,
-        price: Math.max(0, price),
-        volume,
+        price,
+        volume: Math.random() * 1000000, // Random volume
       });
     }
 
     return data;
   }
 
+  /**
+   * Helper method to determine transaction type
+   */
   private determineTransactionType(tx: any): 'swap' | 'transfer' | 'approval' | 'other' {
     if (tx.tokenIn && tx.tokenOut) return 'swap';
-    if (tx.method === 'approve' || tx.functionName === 'approve') return 'approval';
-    if (tx.method === 'transfer' || tx.functionName === 'transfer') return 'transfer';
+    if (tx.method === 'approve') return 'approval';
+    if (tx.value && tx.value !== '0') return 'transfer';
     return 'other';
+  }
+
+  /**
+   * Check if real API is available
+   */
+  async checkApiHealth(chainId: number): Promise<boolean> {
+    try {
+      return await realOneInchApi.checkApiHealth(chainId);
+    } catch (error) {
+      console.error('API health check failed:', error);
+      return false;
+    }
   }
 }
 
 // Export singleton instance
 export const oneInchDataAPI = new OneInchDataAPI();
-
-// Export utility functions for easy use in components
-export const getTokenPrices = (chainId: number, tokenAddresses?: string[], currency?: string) =>
-  oneInchDataAPI.getTokenPrices(chainId, tokenAddresses, currency);
-
-export const getTokenMetadata = (chainId: number, tokenAddresses?: string[]) =>
-  oneInchDataAPI.getTokenMetadata(chainId, tokenAddresses);
-
-export const getTransactionHistory = (address: string, chainId: number, options?: any) =>
-  oneInchDataAPI.getTransactionHistory(address, chainId, options);
-
-export const getWalletData = (address: string, chainId: number) =>
-  oneInchDataAPI.getWalletData(address, chainId);

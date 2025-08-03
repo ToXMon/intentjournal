@@ -6,16 +6,33 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-const ONEINCH_API_KEY = process.env.ONEINCH_AUTH_KEY;
+// CORS headers for all responses
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key, Accept',
+  'Access-Control-Max-Age': '86400',
+};
+
+
+
+// Try multiple API key environment variables
+const ONEINCH_API_KEY = process.env.ONEINCH_AUTH_KEY || 
+                      process.env.ONEINCH_DEV_PORTAL_KEY || 
+                      process.env.NEXT_PUBLIC_ONEINCH_API_KEY;
+
 const BASE_URL = 'https://api.1inch.dev';
 
 // BuildBear fork configuration
 const BUILDBEAR_RPC_URL = 'https://rpc.buildbear.io/smooth-spiderman-faa2b8b9';
 const BUILDBEAR_CHAIN_ID = 27257;
 
-// Use real-time data when API key is available, mock data only as fallback
-const USE_REAL_TIME_DATA = !!ONEINCH_API_KEY;
+// Always try real API first, fallback to mock only on failure
+const USE_REAL_TIME_DATA = true; // Always attempt real API calls
 const FORCE_MOCK_DATA = process.env.FORCE_MOCK_DATA === 'true';
+
+console.log('🔑 1inch API Key available:', !!ONEINCH_API_KEY);
+console.log('🌐 Real-time data enabled:', USE_REAL_TIME_DATA);
 
 // 1inch API endpoint mappings for different protocols
 const PROTOCOL_ENDPOINTS = {
@@ -53,26 +70,74 @@ const PROTOCOL_ENDPOINTS = {
  * Enhance API path to ensure proper routing to 1inch protocols
  */
 function enhanceApiPath(apiPath: string): string {
-  const pathSegments = apiPath.split('/');
-  const firstSegment = pathSegments[0];
-  
   // If path already includes version, return as-is
   if (apiPath.includes('/v') && apiPath.match(/\/v\d+\.\d+/)) {
     return apiPath;
   }
   
+  const pathSegments = apiPath.split('/');
+  
+  // Handle different API patterns
+  if (pathSegments.includes('prices')) {
+    // Convert /prices/chainId to /price/v1.1/chainId
+    const chainIndex = pathSegments.indexOf('prices') + 1;
+    if (chainIndex < pathSegments.length) {
+      const chainId = pathSegments[chainIndex];
+      return `price/v1.1/${chainId}`;
+    }
+  }
+  
+  if (pathSegments.includes('balance')) {
+    // Convert /balance/chainId/address to /balance/v1.2/chainId/balances/address
+    const chainIndex = pathSegments.indexOf('balance') + 1;
+    if (chainIndex + 1 < pathSegments.length) {
+      const chainId = pathSegments[chainIndex];
+      const address = pathSegments[chainIndex + 1];
+      return `balance/v1.2/${chainId}/balances/${address}`;
+    }
+  }
+  
+  if (pathSegments.includes('tokens')) {
+    // Convert /tokens/chainId to /swap/v6.0/chainId/tokens
+    const chainIndex = pathSegments.indexOf('tokens') + 1;
+    if (chainIndex < pathSegments.length) {
+      const chainId = pathSegments[chainIndex];
+      return `swap/v6.0/${chainId}/tokens`;
+    }
+  }
+  
+  if (pathSegments.includes('swap')) {
+    // Handle swap endpoints - /swap/chainId/quote -> /swap/v6.0/chainId/quote
+    const chainIndex = pathSegments.indexOf('swap') + 1;
+    if (chainIndex < pathSegments.length) {
+      const chainId = pathSegments[chainIndex];
+      const remaining = pathSegments.slice(chainIndex + 1).join('/');
+      return `swap/v6.0/${chainId}/${remaining}`;
+    }
+  }
+  
+  if (pathSegments.includes('history')) {
+    // Convert /history/chainId/address to /history/v2.0/chainId/history/address
+    const chainIndex = pathSegments.indexOf('history') + 1;
+    if (chainIndex + 1 < pathSegments.length) {
+      const chainId = pathSegments[chainIndex];
+      const address = pathSegments[chainIndex + 1];
+      return `history/v2.0/${chainId}/history/${address}`;
+    }
+  }
+  
   // Map protocol endpoints
-  if (firstSegment in PROTOCOL_ENDPOINTS) {
-    const protocolBase = PROTOCOL_ENDPOINTS[firstSegment as keyof typeof PROTOCOL_ENDPOINTS];
+  if (pathSegments[0] in PROTOCOL_ENDPOINTS) {
+    const protocolBase = PROTOCOL_ENDPOINTS[pathSegments[0] as keyof typeof PROTOCOL_ENDPOINTS];
     const remainingPath = pathSegments.slice(1).join('/');
     return remainingPath ? `${protocolBase}/${remainingPath}` : protocolBase;
   }
   
   // Handle specific endpoint patterns
-  if (firstSegment === 'swap' || firstSegment === 'quote' || firstSegment === 'tokens') {
+  if (pathSegments[0] === 'swap' || pathSegments[0] === 'quote' || pathSegments[0] === 'tokens') {
     // Classic Swap endpoints - ensure they go to swap API
     const chainId = pathSegments[1];
-    const endpoint = pathSegments[2] || firstSegment;
+    const endpoint = pathSegments[2] || pathSegments[0];
     const remainingPath = pathSegments.slice(3).join('/');
     
     if (chainId && /^\d+$/.test(chainId)) {
@@ -81,7 +146,7 @@ function enhanceApiPath(apiPath: string): string {
     }
   }
   
-  if (firstSegment === 'balance') {
+  if (pathSegments[0] === 'balance') {
     // Balance API endpoints
     const chainId = pathSegments[1];
     const endpoint = pathSegments[2] || 'balances';
@@ -93,7 +158,7 @@ function enhanceApiPath(apiPath: string): string {
     }
   }
   
-  if (firstSegment === 'price') {
+  if (pathSegments[0] === 'price') {
     // Price API endpoints
     const chainId = pathSegments[1];
     const remainingPath = pathSegments.slice(2).join('/');
@@ -352,10 +417,7 @@ async function handleRequest(
       
       return NextResponse.json(mockData, {
         headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
-          'Access-Control-Max-Age': '86400',
+          ...corsHeaders,
           'Cache-Control': method === 'GET' ? 'public, max-age=30' : 'no-cache',
           'X-Mock-Data': 'true',
           'X-Mock-Reason': 'forced',
@@ -498,11 +560,6 @@ export async function DELETE(
 export async function OPTIONS() {
   return new NextResponse(null, {
     status: 200,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
-      'Access-Control-Max-Age': '86400',
-    },
+    headers: corsHeaders,
   });
 }

@@ -39,6 +39,7 @@ export function AppNavigation() {
     { path: '/recommendations', label: 'Recommendations', description: 'AI suggestions', requiresWallet: true },
     { path: '/dashboard', label: 'Dashboard', description: 'DeFi analytics', requiresWallet: true },
     { path: '/share', label: 'Share', description: 'Social posts', requiresWallet: true },
+    { path: '/real-evidence', label: 'Real Evidence', description: 'On-chain demo', requiresWallet: true },
     { path: '/test-1inch-data', label: 'Data APIs', description: '1inch testing', requiresWallet: true },
   ];
 

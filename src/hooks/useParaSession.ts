@@ -16,7 +16,16 @@ export function useParaSession() {
     const initializeSession = async () => {
       try {
         console.log("Initializing Para session...");
-        const initialized = await paraCompat.initializeSession();
+        
+        // Add overall timeout for the entire initialization
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Para session initialization timeout')), 5000)
+        );
+        
+        const initialized = await Promise.race([
+          paraCompat.initializeSession(),
+          timeoutPromise
+        ]);
         
         if (mounted) {
           setIsInitialized(true);
@@ -37,12 +46,21 @@ export function useParaSession() {
       }
     };
 
+    // Add a fallback timeout to ensure we don't hang forever
+    const fallbackTimeout = setTimeout(() => {
+      if (mounted && !isInitialized) {
+        console.warn("Para session initialization taking too long, proceeding without it");
+        setIsInitialized(true);
+      }
+    }, 8000);
+
     initializeSession();
 
     return () => {
       mounted = false;
+      clearTimeout(fallbackTimeout);
     };
-  }, [queryClient]);
+  }, [queryClient, isInitialized]);
 
   return { isInitialized };
 }

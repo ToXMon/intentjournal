@@ -45,8 +45,8 @@ export function useParaAccount() {
   
   // Ensure wallets is always an array
   let wallets = [];
-  if (account?.embedded?.wallets && Array.isArray(account.embedded.wallets)) {
-    wallets = account.embedded.wallets;
+  if ((account as any)?.embedded?.wallets && Array.isArray((account as any).embedded.wallets)) {
+    wallets = (account as any).embedded.wallets;
   } else if (account?.wallets && Array.isArray(account.wallets)) {
     wallets = account.wallets;
   } else if (account?.wallets && typeof account.wallets === 'object') {

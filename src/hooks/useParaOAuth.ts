@@ -110,7 +110,7 @@ export function useParaOAuth() {
         return result;
       }
 
-      console.error("Invalid auth state stage:", authState.stage);
+      console.error("Invalid auth state stage:", (authState as any).stage);
       throw new Error("Invalid auth state");
     },
     onSuccess: () => {

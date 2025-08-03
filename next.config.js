@@ -1,16 +1,36 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone',
-  transpilePackages: ['@getpara/react-sdk'],
-  webpack: (config) => {
+  transpilePackages: ['@getpara/react-sdk', '@getpara/web-sdk'],
+  experimental: {
+    esmExternals: 'loose'
+  },
+  webpack: (config, { isServer }) => {
     config.resolve.fallback = {
       fs: false,
       net: false,
       tls: false,
+      crypto: false,
+      stream: false,
+      url: false,
+      zlib: false,
+      http: false,
+      https: false,
+      assert: false,
+      os: false,
+      path: false
     };
+    
     config.externals.push('pino-pretty', 'lokijs', 'encoding');
-    // Disable caching to save disk space
-    config.cache = false;
+    
+    // Ignore node-specific modules in client bundle
+    if (!isServer) {
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        'utf-8-validate': false,
+        'bufferutil': false,
+      };
+    }
+    
     return config;
   },
   images: {

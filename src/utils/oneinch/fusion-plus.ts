@@ -229,15 +229,15 @@ export class FusionPlusManager {
     try {
       console.log('🔍 Getting Fusion+ order status:', orderHash);
 
-      // Mock order status with execution progress
+      // Mock order status with execution progress using correct chain IDs
       const mockStatus: FusionPlusOrderResult = {
         orderId: 'fusionplus_1234567890_abc123',
         orderHash,
         status: 'executing',
-        srcChainId: 8453, // Base
-        dstChainId: 42161, // Arbitrum
-        srcToken: '0xe5ccdc758917ec96bd81932af3ef39837aebe01a',
-        dstToken: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+        srcChainId: 27257, // BuildBear Base Fork
+        dstChainId: 128123, // Etherlink Testnet
+        srcToken: '0xea3d7f3F9A704d970627bB404a35eA6f11C69646', // IJT on BuildBear
+        dstToken: '0x064Abf44F593C198e34E55e4C129580c425b499F', // USDC on BuildBear
         srcAmount: '100000000000000000000', // 100 IJT
         dstAmount: '149000000', // 149 USDC (after fees)
         secrets: ['0x' + Array(64).fill('a').join('')],
@@ -248,38 +248,38 @@ export class FusionPlusManager {
         executionSteps: [
           {
             step: 1,
-            description: 'Lock funds on source chain',
+            description: 'Lock funds on BuildBear Base Fork',
             status: 'completed',
-            chainId: 8453,
+            chainId: 27257,
             txHash: '0x1111111111111111111111111111111111111111111111111111111111111111',
             timestamp: Date.now() - (50 * 60 * 1000),
           },
           {
             step: 2,
-            description: 'Initiate cross-chain bridge',
+            description: 'Initiate cross-chain bridge to Etherlink',
             status: 'completed',
-            chainId: 8453,
+            chainId: 27257,
             txHash: '0x2222222222222222222222222222222222222222222222222222222222222222',
             timestamp: Date.now() - (45 * 60 * 1000),
           },
           {
             step: 3,
-            description: 'Verify bridge on destination chain',
+            description: 'Verify bridge on Etherlink testnet',
             status: 'in_progress',
-            chainId: 42161,
+            chainId: 128123,
             timestamp: Date.now() - (5 * 60 * 1000),
           },
           {
             step: 4,
-            description: 'Execute swap on destination chain',
+            description: 'Execute swap on Etherlink testnet',
             status: 'pending',
-            chainId: 42161,
+            chainId: 128123,
           },
           {
             step: 5,
-            description: 'Release funds to user',
+            description: 'Release funds to user on Etherlink',
             status: 'pending',
-            chainId: 42161,
+            chainId: 128123,
           },
         ],
         gasless: true,
@@ -403,6 +403,20 @@ export class FusionPlusManager {
     estimatedTime: number;
   }> {
     return [
+      {
+        srcChainId: 27257,
+        srcChainName: 'BuildBear Base Fork',
+        dstChainId: 128123,
+        dstChainName: 'Etherlink Testnet',
+        estimatedTime: 300, // 5 minutes
+      },
+      {
+        srcChainId: 128123,
+        srcChainName: 'Etherlink Testnet',
+        dstChainId: 27257,
+        dstChainName: 'BuildBear Base Fork',
+        estimatedTime: 300, // 5 minutes
+      },
       {
         srcChainId: 8453,
         srcChainName: 'Base',

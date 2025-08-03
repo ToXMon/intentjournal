@@ -23,6 +23,10 @@ yarn-error.log*
 # Hardhat
 /cache
 /artifacts
+contracts/cache/
+contracts/artifacts/
+contracts/node_modules/
+contracts/package-lock.json
 
 # TypeScript
 *.tsbuildinfo

@@ -10,6 +10,15 @@ export interface FusionOrderParams {
   walletAddress: string;
   preset?: 'fast' | 'medium' | 'slow';
   auctionDuration?: number; // in seconds
+  // Enhanced for intent-based orders
+  intentId?: string;
+  intentText?: string;
+  aiConfidence?: number;
+  biasAndEdge?: {
+    marketBias: 'bullish' | 'bearish' | 'neutral';
+    edgeScore: number; // 0-1 score indicating trading edge
+    riskLevel: 'low' | 'medium' | 'high';
+  };
 }
 
 export interface FusionOrderResult {
@@ -27,6 +36,22 @@ export interface FusionOrderResult {
   preset: string;
   gasless: boolean;
   mevProtected: boolean;
+  // Enhanced for intent tracking
+  intentId?: string;
+  intentText?: string;
+  aiConfidence?: number;
+  biasAndEdge?: {
+    marketBias: 'bullish' | 'bearish' | 'neutral';
+    edgeScore: number;
+    riskLevel: 'low' | 'medium' | 'high';
+  };
+  // Add expiration for compatibility with IntentStatusTracker
+  expiration?: number;
+  // Add token asset addresses for compatibility
+  makerAsset?: string;
+  takerAsset?: string;
+  makingAmount?: string;
+  takingAmount?: string;
 }
 
 export interface FusionResolver {
@@ -390,6 +415,155 @@ export class FusionManager {
       return 'slow';
     } else {
       return 'medium';
+    }
+  }
+
+  /**
+   * Create Fusion order from AI recommendation with bias and edge analysis
+   */
+  static async createOrderFromIntent(
+    intentId: string,
+    intentText: string,
+    recommendation: {
+      fromToken: { address: string; symbol: string };
+      toToken: { address: string; symbol: string };
+      fromAmount: string;
+      toAmount: string;
+      confidence: number;
+    },
+    walletAddress: string,
+    chainId: number,
+    biasAndEdge?: {
+      marketBias: 'bullish' | 'bearish' | 'neutral';
+      edgeScore: number;
+      riskLevel: 'low' | 'medium' | 'high';
+    }
+  ): Promise<FusionOrderResult | null> {
+    // Determine optimal preset based on bias and edge
+    let preset: 'fast' | 'medium' | 'slow' = 'medium';
+    
+    if (biasAndEdge) {
+      if (biasAndEdge.edgeScore > 0.8 && biasAndEdge.riskLevel === 'low') {
+        preset = 'slow'; // Take time for better execution
+      } else if (biasAndEdge.edgeScore < 0.4 || biasAndEdge.riskLevel === 'high') {
+        preset = 'fast'; // Execute quickly to minimize risk
+      }
+    }
+
+    const params: FusionOrderParams = {
+      fromTokenAddress: recommendation.fromToken.address,
+      toTokenAddress: recommendation.toToken.address,
+      amount: recommendation.fromAmount,
+      walletAddress,
+      preset,
+      intentId,
+      intentText,
+      aiConfidence: recommendation.confidence,
+      biasAndEdge,
+    };
+
+    const order = await this.createFusionOrder(params, chainId);
+    
+    if (order) {
+      // Add compatibility fields for IntentStatusTracker
+      order.expiration = order.auctionEndTime;
+      order.makerAsset = recommendation.fromToken.address;
+      order.takerAsset = recommendation.toToken.address;
+      order.makingAmount = recommendation.fromAmount;
+      order.takingAmount = recommendation.toAmount;
+    }
+
+    return order;
+  }
+
+  /**
+   * Analyze market bias and trading edge from intent text
+   */
+  static async analyzeIntentBiasAndEdge(
+    intentText: string,
+    marketData?: {
+      price: number;
+      volume24h: number;
+      priceChange24h: number;
+    }
+  ): Promise<{
+    marketBias: 'bullish' | 'bearish' | 'neutral';
+    edgeScore: number;
+    riskLevel: 'low' | 'medium' | 'high';
+    reasoning: string;
+  }> {
+    try {
+      // Simple sentiment analysis based on keywords
+      const bullishKeywords = ['buy', 'bullish', 'up', 'rise', 'pump', 'moon', 'long', 'accumulate'];
+      const bearishKeywords = ['sell', 'bearish', 'down', 'fall', 'dump', 'short', 'exit'];
+      const riskKeywords = ['risky', 'volatile', 'uncertain', 'gamble', 'yolo'];
+      const confidenceKeywords = ['confident', 'sure', 'certain', 'analysis', 'research'];
+
+      const lowerIntent = intentText.toLowerCase();
+      
+      let bullishScore = 0;
+      let bearishScore = 0;
+      let riskScore = 0;
+      let confidenceScore = 0;
+
+      bullishKeywords.forEach(keyword => {
+        if (lowerIntent.includes(keyword)) bullishScore++;
+      });
+
+      bearishKeywords.forEach(keyword => {
+        if (lowerIntent.includes(keyword)) bearishScore++;
+      });
+
+      riskKeywords.forEach(keyword => {
+        if (lowerIntent.includes(keyword)) riskScore++;
+      });
+
+      confidenceKeywords.forEach(keyword => {
+        if (lowerIntent.includes(keyword)) confidenceScore++;
+      });
+
+      // Determine market bias
+      let marketBias: 'bullish' | 'bearish' | 'neutral';
+      if (bullishScore > bearishScore) {
+        marketBias = 'bullish';
+      } else if (bearishScore > bullishScore) {
+        marketBias = 'bearish';
+      } else {
+        marketBias = 'neutral';
+      }
+
+      // Calculate edge score (0-1)
+      const totalSentiment = bullishScore + bearishScore;
+      const sentimentStrength = totalSentiment > 0 ? Math.abs(bullishScore - bearishScore) / totalSentiment : 0;
+      const edgeScore = Math.min(1, (sentimentStrength * 0.6) + (confidenceScore * 0.4));
+
+      // Determine risk level
+      let riskLevel: 'low' | 'medium' | 'high';
+      if (riskScore > 2 || edgeScore < 0.3) {
+        riskLevel = 'high';
+      } else if (riskScore > 0 || edgeScore < 0.6) {
+        riskLevel = 'medium';
+      } else {
+        riskLevel = 'low';
+      }
+
+      const reasoning = `Detected ${marketBias} sentiment with ${edgeScore.toFixed(2)} edge score. ` +
+        `Risk level: ${riskLevel} based on ${riskScore} risk indicators and ${confidenceScore} confidence signals.`;
+
+      return {
+        marketBias,
+        edgeScore,
+        riskLevel,
+        reasoning,
+      };
+    } catch (error) {
+      console.error('Failed to analyze intent bias and edge:', error);
+      return {
+        marketBias: 'neutral',
+        edgeScore: 0.5,
+        riskLevel: 'medium',
+        reasoning: 'Unable to analyze intent sentiment',
+      };
     }
   }
 }

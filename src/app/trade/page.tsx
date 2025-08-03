@@ -11,6 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { TokenSwapInterface } from '@/components/token-swap-interface';
 import { TokenPriceFeed } from '@/components/token-price-feed';
 import { AppNavigation } from '@/components/app-navigation';
+import FusionPlusDemo from '@/components/fusion-plus-demo';
+import IJTTokenFaucet from '@/components/ijt-token-faucet';
 import { 
   TrendingUp, 
   Zap, 
@@ -121,6 +123,13 @@ export default function TradePage() {
           {/* Main Trading Interface */}
           <div className="lg:col-span-2 space-y-6">
             <TradingFeatures />
+            
+            {/* IJT Token Faucet */}
+            <IJTTokenFaucet />
+            
+            {/* Fusion+ Cross-Chain Demo */}
+            <FusionPlusDemo />
+            
             <TokenSwapInterface />
           </div>
 

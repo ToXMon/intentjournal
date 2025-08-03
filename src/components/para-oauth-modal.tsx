@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 // Simplified type until Para SDK is properly integrated
-type TOAuthMethod = "GOOGLE" | "TWITTER" | "APPLE" | "DISCORD" | "FACEBOOK" | "FARCASTER" | "TELEGRAM";
+type TOAuthMethod = "GOOGLE" | "TWITTER" | "APPLE" | "DISCORD" | "FACEBOOK" | "TELEGRAM";
 import { useParaOAuth } from "@/hooks/useParaOAuth";
 import { useParaWalletSync } from "@/hooks/useParaWalletSync";
 import { useAppStore } from "@/lib/store";
@@ -156,7 +156,7 @@ export function ParaOAuthModal({ isOpen, onClose }: ParaOAuthModalProps) {
       });
 
       await handleAuthStateAsync({
-        authState,
+        authState: authState as any,
         openPopup,
         popupWindow
       });

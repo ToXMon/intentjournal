@@ -18,6 +18,8 @@ import { useAppStore } from '@/lib/store';
 import { DeFiDashboard } from '@/components/defi-dashboard';
 import { OneInchDataDashboard } from '@/components/oneinch-data-dashboard';
 import { TokenPriceFeed } from '@/components/token-price-feed';
+import FusionPlusDemo from '@/components/fusion-plus-demo';
+import IJTTokenFaucet from '@/components/ijt-token-faucet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BarChart3, TrendingUp, Wallet, Activity } from 'lucide-react';
 
@@ -142,6 +144,12 @@ export default function DashboardPage() {
             </TabsList>
 
             <TabsContent value="overview" className="space-y-6">
+              {/* IJT Token Faucet */}
+              <IJTTokenFaucet />
+              
+              {/* Fusion+ Cross-Chain Demo */}
+              <FusionPlusDemo />
+              
               <Card>
                 <CardHeader>
                   <CardTitle>Portfolio Overview</CardTitle>

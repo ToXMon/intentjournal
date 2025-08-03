@@ -1,0 +1,23 @@
+{
+  "name": "intentjournal-contracts",
+  "version": "1.0.0",
+  "description": "Smart contracts for IntentJournal+ hackathon project",
+  "main": "index.js",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:buildbear": "hardhat run scripts/deploy.ts --network buildbearBaseFork",
+    "deploy:etherlink": "hardhat run scripts/deploy.ts --network etherlinkTestnet",
+    "deploy-mocks": "hardhat run scripts/deployMocks.ts",
+    "deploy-escrows": "hardhat run scripts/deployEscrows.ts",
+    "faucet": "hardhat run scripts/faucet.ts --network buildbearBaseFork"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "@openzeppelin/contracts": "^5.0.0",
+    "hardhat": "^2.19.0"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.1"
+  }
+}

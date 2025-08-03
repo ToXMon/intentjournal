@@ -7,13 +7,22 @@ import { WalletConnect } from '@/components/wallet-connect'
 import { AppNavigation } from '@/components/app-navigation'
 import { FlowBreadcrumb } from '@/components/flow-breadcrumb'
 import { WalletDataDebug } from '@/components/wallet-data-debug'
+import { IntentLimitOrder } from '@/components/intent-limit-order'
+import { IntentStatusTracker } from '@/components/intent-status-tracker'
+import { BiasEdgeAnalyzer } from '@/components/bias-edge-analyzer'
+import { EtherlinkCrossChainDemo } from '@/components/etherlink-cross-chain-demo'
+import { OnChainIntentExecutor } from '@/components/onchain-intent-executor'
+import { CleanJournalInterface } from '@/components/clean-journal-interface'
 import { useParaAccount } from '@/hooks/useParaAccount'
+import type { OnChainEvidence, IntentExecutionResult } from '@/utils/intent-execution'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAppStore } from '@/lib/store'
 import { DeFiDashboard } from '@/components/defi-dashboard'
 import { TokenPriceFeed } from '@/components/token-price-feed'
+import type { LimitOrderResult } from '@/utils/oneinch/limit-orders'
 
 export default function JournalPage() {
   const router = useRouter()
@@ -25,10 +34,22 @@ export default function JournalPage() {
   const { address: paraAddress, isConnected: paraConnected } = useParaAccount()
   
   // App store state (unified wallet state)
-  const { walletAddress, walletType, addJournalEntry, journalEntries, generateRecommendations } = useAppStore()
+  const { walletAddress, walletType, addJournalEntry, journalEntries, generateRecommendations, currentRecommendations } = useAppStore()
   
   const [journalEntry, setJournalEntry] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [hasSubmittedIntent, setHasSubmittedIntent] = useState(false)
+  const [showLimitOrderFlow, setShowLimitOrderFlow] = useState(false)
+  const [currentIntentId, setCurrentIntentId] = useState<string | null>(null)
+  const [createdOrders, setCreatedOrders] = useState<LimitOrderResult[]>([])
+  const [biasEdgeAnalysis, setBiasEdgeAnalysis] = useState<{
+    marketBias: 'bullish' | 'bearish' | 'neutral';
+    edgeScore: number;
+    riskLevel: 'low' | 'medium' | 'high';
+    reasoning: string;
+  } | null>(null)
+  const [onChainEvidence, setOnChainEvidence] = useState<OnChainEvidence[]>([])
+  const [hasVerifiedIntent, setHasVerifiedIntent] = useState(false)
 
   // Determine connection status from multiple sources
   const isConnected = walletType === 'para' ? paraConnected : isWeb3Connected
@@ -50,24 +71,47 @@ export default function JournalPage() {
     }
   }, [finalIsConnected, router])
 
-  const handleSubmitEntry = async () => {
-    if (!journalEntry.trim()) return
+  const handleSubmitEntry = async (entry: string) => {
+    if (!entry.trim()) return
     
     setIsSubmitting(true)
     try {
-      await addJournalEntry(journalEntry)
-      setJournalEntry('')
+      await addJournalEntry(entry)
+      
+      // Store the current intent ID for limit order creation
+      const latestEntry = journalEntries[0]
+      if (latestEntry) {
+        setCurrentIntentId(latestEntry.id)
+      }
       
       // Generate AI recommendations after adding entry
       await generateRecommendations()
       
-      // Redirect to recommendations page
-      router.push('/recommendations')
+      // Transition from clean interface to complex interface
+      setHasSubmittedIntent(true)
+      setShowLimitOrderFlow(true)
     } catch (error) {
       console.error('Error submitting journal entry:', error)
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  const handleOrderCreated = (order: LimitOrderResult) => {
+    setCreatedOrders(prev => [order, ...prev])
+    console.log('✅ New limit order created from intent:', order)
+  }
+
+  const handleIntentExecuted = (result: IntentExecutionResult) => {
+    console.log('✅ Intent executed on-chain:', result)
+    // Intent execution successful, but need to wait for evidence verification
+  }
+
+  const handleEvidenceVerified = (evidence: OnChainEvidence[]) => {
+    console.log('✅ On-chain evidence verified:', evidence)
+    setOnChainEvidence(evidence)
+    setHasVerifiedIntent(true)
+    // Now Bias & Edge analysis is available
   }
 
   if (!finalIsConnected) {
@@ -84,6 +128,20 @@ export default function JournalPage() {
           </div>
         </div>
       </div>
+    )
+  }
+
+  // Show clean interface initially, complex interface after submission
+  if (!hasSubmittedIntent) {
+    return (
+      <CleanJournalInterface
+        onSubmit={handleSubmitEntry}
+        isSubmitting={isSubmitting}
+        placeholder="Share your DeFi thoughts and intentions... 
+
+Example: I'm thinking about diversifying my portfolio. I have some ETH and I'm considering swapping part of it to USDC for stability, but I'm also interested in yield farming opportunities on Base..."
+        helpText="Your entry will be processed with Venice AI to generate personalized DeFi recommendations and create gasless limit orders."
+      />
     )
   }
 
@@ -122,66 +180,167 @@ export default function JournalPage() {
             >
               DeFi Dashboard
             </Button>
+            <Button 
+              variant="outline" 
+              onClick={() => setHasSubmittedIntent(false)}
+            >
+              New Entry
+            </Button>
           </div>
         </header>
 
         <div className="max-w-4xl mx-auto grid gap-6 md:grid-cols-3">
-          {/* Main Journal Entry Section */}
-          <Card className="md:col-span-2">
-            <CardHeader>
-              <CardTitle>Write Your Financial Intent</CardTitle>
-              <CardDescription>
-                Describe your trading thoughts, market observations, or financial goals. 
-                Our AI will analyze your entries to provide personalized DeFi recommendations using 1inch APIs.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Textarea
-                placeholder="Example: I'm thinking about diversifying my portfolio. I have some ETH and I'm considering swapping part of it to USDC for stability, but I'm also interested in yield farming opportunities on Base..."
-                value={journalEntry}
-                onChange={(e) => setJournalEntry(e.target.value)}
-                className="min-h-[200px] text-base"
-              />
-              <div className="flex gap-2">
-                <Button 
-                  onClick={handleSubmitEntry}
-                  disabled={!journalEntry.trim() || isSubmitting}
-                  className="flex-1"
-                >
-                  {isSubmitting ? (
-                    <div className="flex items-center gap-2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      Processing with AI...
-                    </div>
+          {/* Main Recommendations and Actions Section */}
+          <div className="md:col-span-2 space-y-6">
+
+            {/* Intent-Based Limit Order Flow - Now shown after intent submission */}
+            {hasSubmittedIntent && currentIntentId && (
+              <Tabs defaultValue="recommendation" className="w-full">
+                <TabsList className="grid w-full grid-cols-5">
+                  <TabsTrigger value="recommendation">AI Recommendation</TabsTrigger>
+                  <TabsTrigger value="execute">Execute On-Chain</TabsTrigger>
+                  <TabsTrigger value="biasedge" disabled={!hasVerifiedIntent}>
+                    Bias & Edge {!hasVerifiedIntent && '🔒'}
+                  </TabsTrigger>
+                  <TabsTrigger value="crosschain">Cross-Chain</TabsTrigger>
+                  <TabsTrigger value="limitorder">Create Order</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="recommendation" className="space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">🤖 AI-Powered Recommendation</CardTitle>
+                      <CardDescription>
+                        Based on your intent analysis and current market conditions
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {currentRecommendations.length > 0 && currentRecommendations[0] ? (
+                        <div className="space-y-4">
+                          <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                            <p className="text-sm text-blue-800 dark:text-blue-200">
+                              {currentRecommendations[0].reasoning}
+                            </p>
+                          </div>
+                          
+                          <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                            <div className="text-center">
+                              <p className="font-medium">{currentRecommendations[0].tokenPair.from.symbol}</p>
+                              <p className="text-sm text-gray-500">{currentRecommendations[0].route.fromAmount}</p>
+                            </div>
+                            <div className="text-blue-600 dark:text-blue-400">→</div>
+                            <div className="text-center">
+                              <p className="font-medium">{currentRecommendations[0].tokenPair.to.symbol}</p>
+                              <p className="text-sm text-gray-500">{currentRecommendations[0].route.toAmount}</p>
+                            </div>
+                          </div>
+                          
+                          <div className="text-center">
+                            <p className="text-sm text-gray-500">AI Confidence</p>
+                            <p className="text-lg font-bold text-green-600 dark:text-green-400">
+                              {(currentRecommendations[0].confidence * 100).toFixed(0)}%
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center py-8">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                          <p className="text-gray-600 dark:text-gray-400">
+                            Generating AI recommendations...
+                          </p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+                
+                <TabsContent value="execute" className="space-y-4">
+                  {currentRecommendations.length > 0 && currentRecommendations[0] ? (
+                    <OnChainIntentExecutor
+                      intentText={journalEntries.find(e => e.id === currentIntentId)?.content || ''}
+                      recommendation={currentRecommendations[0]}
+                      onExecutionComplete={handleIntentExecuted}
+                      onEvidenceVerified={handleEvidenceVerified}
+                    />
                   ) : (
-                    'Submit & Get AI Recommendations'
-                  )}
-                </Button>
-                <Button 
-                  variant="outline"
-                  onClick={() => setJournalEntry('')}
-                  disabled={isSubmitting}
-                >
-                  Clear
-                </Button>
-              </div>
-              {isSubmitting ? (
-                <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
-                  <div className="flex items-center gap-2 text-blue-800 dark:text-blue-200">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                    <div className="text-sm">
-                      <p className="font-medium">🧠 Venice AI is analyzing your entry...</p>
-                      <p className="text-xs mt-1">Creating embeddings and generating personalized recommendations</p>
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                      <p className="text-gray-600 dark:text-gray-400">
+                        Waiting for AI recommendations to load...
+                      </p>
                     </div>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-xs text-gray-500">
-                  Your entry will be processed with Venice AI to generate personalized DeFi recommendations based on your financial intentions.
-                </p>
-              )}
-            </CardContent>
-          </Card>
+                  )}
+                </TabsContent>
+                
+                <TabsContent value="biasedge" className="space-y-4">
+                  {hasVerifiedIntent ? (
+                    <BiasEdgeAnalyzer
+                      intentText={journalEntries.find(e => e.id === currentIntentId)?.content || ''}
+                      tokenAddress={currentRecommendations[0]?.tokenPair.from.address}
+                      onAnalysisComplete={setBiasEdgeAnalysis}
+                    />
+                  ) : (
+                    <div className="text-center py-8">
+                      <div className="mb-4">
+                        <div className="mx-auto w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
+                          <span className="text-2xl">🔒</span>
+                        </div>
+                      </div>
+                      <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                        On-Chain Evidence Required
+                      </h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                        Execute your intent on-chain first to unlock advanced Bias & Edge analysis with technical indicators and AI vision.
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Go to "Execute On-Chain" tab to create a real Dutch auction order
+                      </p>
+                    </div>
+                  )}
+                </TabsContent>
+                
+                <TabsContent value="crosschain" className="space-y-4">
+                  <EtherlinkCrossChainDemo
+                    intentText={journalEntries.find(e => e.id === currentIntentId)?.content || ''}
+                    recommendation={currentRecommendations.length > 0 && currentRecommendations[0] ? {
+                      fromToken: currentRecommendations[0].tokenPair.from,
+                      toToken: currentRecommendations[0].tokenPair.to,
+                      fromAmount: currentRecommendations[0].route.fromAmount,
+                      toAmount: currentRecommendations[0].route.toAmount,
+                    } : undefined}
+                  />
+                </TabsContent>
+                
+                <TabsContent value="limitorder" className="space-y-4">
+                  {currentRecommendations.length > 0 && currentRecommendations[0] ? (
+                    <IntentLimitOrder
+                      recommendation={currentRecommendations[0]}
+                      intentId={currentIntentId}
+                      intentText={journalEntries.find(e => e.id === currentIntentId)?.content || ''}
+                      onOrderCreated={handleOrderCreated}
+                    />
+                  ) : (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                      <p className="text-gray-600 dark:text-gray-400">
+                        Waiting for AI recommendations to load...
+                      </p>
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
+            )}
+
+            {/* Intent Status Tracker */}
+            {createdOrders.length > 0 && (
+              <IntentStatusTracker
+                orders={createdOrders}
+                onOrderUpdate={(orderId, status) => {
+                  console.log(`Order ${orderId} updated to status: ${status}`)
+                }}
+              />
+            )}
+          </div>
 
           {/* DeFi Dashboard Sidebar */}
           <div className="space-y-4">
