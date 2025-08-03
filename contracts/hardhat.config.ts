@@ -1,6 +1,7 @@
-const { HardhatUserConfig } = require("hardhat/config");
-require("@nomicfoundation/hardhat-toolbox");
-const dotenv = require("dotenv");
+import { HardhatUserConfig } from "hardhat/config";
+import "@nomicfoundation/hardhat-toolbox";
+import "@nomicfoundation/hardhat-verify";
+import * as dotenv from "dotenv";
 
 // Load environment variables from parent directory
 dotenv.config({ path: "../.env" });
@@ -42,6 +43,21 @@ const config: HardhatUserConfig = {
     cache: "./cache",
     artifacts: "./artifacts",
   },
+  etherscan: {
+    apiKey: {
+      etherlinkTestnet: "no-api-key-needed"
+    },
+    customChains: [
+      {
+        network: "etherlinkTestnet",
+        chainId: 128123,
+        urls: {
+          apiURL: "https://testnet.explorer.etherlink.com/api",
+          browserURL: "https://testnet.explorer.etherlink.com"
+        }
+      }
+    ]
+  },
 };
 
-module.exports = config;
+export default config;

@@ -18,7 +18,7 @@ const mockRecommendation: DeFiRecommendation = {
   id: 'rec-1',
   tokenPair: {
     from: {
-      address: '0xA0b86a33E6441b8C0b8d9B0b8b8b8b8b8b8b8b',
+      address: '0xA0b86a33E6441b8C0b8d9B0b8b8b8b8b8b8b8b8b',
       symbol: 'USDC',
       name: 'USD Coin',
       decimals: 6,
@@ -26,7 +26,7 @@ const mockRecommendation: DeFiRecommendation = {
       chainId: 27257
     },
     to: {
-      address: '0xB0b86a33E6441b8C0b8d9B0b8b8b8b8b8b8b8b',
+      address: '0xB0b86a33E6441b8C0b8d9B0b8b8b8b8b8b8b8b8b',
       symbol: 'WETH',
       name: 'Wrapped Ether',
       decimals: 18,
@@ -36,7 +36,7 @@ const mockRecommendation: DeFiRecommendation = {
   },
   route: {
     fromToken: {
-      address: '0xA0b86a33E6441b8C0b8d9B0b8b8b8b8b8b8b8b',
+      address: '0xA0b86a33E6441b8C0b8d9B0b8b8b8b8b8b8b8b8b',
       symbol: 'USDC',
       name: 'USD Coin',
       decimals: 6,
@@ -44,7 +44,7 @@ const mockRecommendation: DeFiRecommendation = {
       chainId: 27257
     },
     toToken: {
-      address: '0xB0b86a33E6441b8C0b8d9B0b8b8b8b8b8b8b8b',
+      address: '0xB0b86a33E6441b8C0b8d9B0b8b8b8b8b8b8b8b8b',
       symbol: 'WETH',
       name: 'Wrapped Ether',
       decimals: 18,

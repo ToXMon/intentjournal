@@ -33,7 +33,7 @@ const DEMO_TOKENS = {
     name: 'Ethereum'
   },
   USDC: {
-    address: '0xa0b86a33e6441b8c0b8d9b0b8b8b8b8b8b8b8b8b',
+    address: '0xA0b86a33E6441b8C0b8d9B0b8b8b8b8b8b8b8b8b8b',
     symbol: 'USDC',
     name: 'USD Coin'
   },
