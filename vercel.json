@@ -3,12 +3,6 @@
   "name": "intentjournal-plus",
   "buildCommand": "npm run build",
   "installCommand": "npm install --legacy-peer-deps",
-  "routes": [
-    {
-      "src": "/api/1inch/(.*)",
-      "dest": "/api/1inch/$1"
-    }
-  ],
   "env": {
     "NODE_ENV": "production",
     "USE_REAL_TIME_DATA": "true",
@@ -38,6 +32,10 @@
     }
   ],
   "rewrites": [
+    {
+      "source": "/api/1inch/(.*)",
+      "destination": "/api/1inch/$1"
+    },
     {
       "source": "/1inch-api/(.*)",
       "destination": "/api/1inch/$1"
