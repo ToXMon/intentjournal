@@ -37,6 +37,11 @@
   ],
   "exclude": [
     "node_modules",
-    "contracts/**/*"
+    "contracts/**/*",
+    "tests/**/*",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx"
   ]
 }

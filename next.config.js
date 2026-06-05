@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
   transpilePackages: ['@getpara/react-sdk', '@getpara/web-sdk'],
   experimental: {
     esmExternals: 'loose'

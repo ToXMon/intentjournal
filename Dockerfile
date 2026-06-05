@@ -1,5 +1,8 @@
 # Multi-stage build optimized for Akash deployment with linux/amd64 platform
-FROM --platform=linux/amd64 node:18-alpine AS base
+FROM --platform=linux/amd64 node:18.20.5-alpine3.20 AS base
+ENV PNPM_HOME=/pnpm
+ENV PATH=$PNPM_HOME:$PATH
+RUN corepack enable
 
 # Install dependencies only when needed
 FROM base AS deps
@@ -7,11 +10,10 @@ RUN apk add --no-cache libc6-compat curl
 WORKDIR /app
 
 # Copy package files
-COPY package.json package-lock.json* ./
+COPY package.json pnpm-lock.yaml ./
 
-# Install dependencies with production optimizations
-RUN npm ci --only=production --ignore-scripts && \
-    npm cache clean --force
+# Install all dependencies for a repeatable Next.js build
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # Rebuild the source code only when needed
 FROM base AS builder
@@ -24,26 +26,34 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV GENERATE_SOURCEMAP=false
 
-# Build arguments for required environment variables
+# Build arguments for public build-time environment variables
 ARG NEXT_PUBLIC_PARA_API_KEY
+ARG NEXT_PUBLIC_PARA_SECRET_KEY
 ARG NEXT_PUBLIC_VENICE_API_KEY
-ARG NEXT_PUBLIC_ONEINCH_API_KEY
+ARG NEXT_PUBLIC_ALCHEMY_KEY
+ARG NEXT_PUBLIC_ALCHEMY_API_KEY_BASE
+ARG NEXT_PUBLIC_PRIVY_APP_ID
 ARG NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
-ARG NEXT_PUBLIC_BASE_SEPOLIA_RPC
-ARG NEXT_PUBLIC_ETHERLINK_RPC
+ARG NEXT_PUBLIC_BASE_SEPOLIA_RPC=https://sepolia.base.org
+ARG NEXT_PUBLIC_ETHERLINK_RPC=https://node.ghostnet.etherlink.com
+ARG NEXT_PUBLIC_ETHERLINK_ESCROW_ADDRESS
 
 # Set environment variables for build time
 ENV NEXT_PUBLIC_PARA_API_KEY=$NEXT_PUBLIC_PARA_API_KEY
+ENV NEXT_PUBLIC_PARA_SECRET_KEY=$NEXT_PUBLIC_PARA_SECRET_KEY
 ENV NEXT_PUBLIC_VENICE_API_KEY=$NEXT_PUBLIC_VENICE_API_KEY
-ENV NEXT_PUBLIC_ONEINCH_API_KEY=$NEXT_PUBLIC_ONEINCH_API_KEY
+ENV NEXT_PUBLIC_ALCHEMY_KEY=$NEXT_PUBLIC_ALCHEMY_KEY
+ENV NEXT_PUBLIC_ALCHEMY_API_KEY_BASE=$NEXT_PUBLIC_ALCHEMY_API_KEY_BASE
+ENV NEXT_PUBLIC_PRIVY_APP_ID=$NEXT_PUBLIC_PRIVY_APP_ID
 ENV NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=$NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
 ENV NEXT_PUBLIC_BASE_SEPOLIA_RPC=$NEXT_PUBLIC_BASE_SEPOLIA_RPC
 ENV NEXT_PUBLIC_ETHERLINK_RPC=$NEXT_PUBLIC_ETHERLINK_RPC
+ENV NEXT_PUBLIC_ETHERLINK_ESCROW_ADDRESS=$NEXT_PUBLIC_ETHERLINK_ESCROW_ADDRESS
 
 # Build the application
-RUN npm run build
+RUN pnpm run build
 
-# Production image, copy all the files and run next
+# Production image, copy all the files and run Next standalone server
 FROM base AS runner
 RUN apk add --no-cache curl
 WORKDIR /app
@@ -61,15 +71,12 @@ RUN addgroup --system --gid 1001 nodejs && \
 # Copy public assets
 COPY --from=builder /app/public ./public
 
-# Create .next directory with proper permissions
-RUN mkdir .next && chown nextjs:nodejs .next
-
 # Copy built application
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 # Health check for Akash deployment
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:3000/api/health || exit 1
 
 # Switch to non-root user
