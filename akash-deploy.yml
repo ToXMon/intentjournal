@@ -3,7 +3,7 @@ version: "2.0"
 
 services:
   intentjournal-app:
-    image: ghcr.io/toxmon/intentjournal-plus:fbc217e
+    image: ghcr.io/toxmon/intentjournal-plus:7aca572
     expose:
       - port: 3000
         as: 80
