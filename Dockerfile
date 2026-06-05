@@ -2,7 +2,8 @@
 FROM --platform=linux/amd64 node:18.20.5-alpine3.20 AS base
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
-RUN corepack enable
+ENV COREPACK_INTEGRITY_KEYS=0
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 
 # Install dependencies only when needed
 FROM base AS deps
