@@ -33,7 +33,7 @@ profiles:
       pricing:
         intentjournal-app:
           denom: uact
-          amount: 1000
+          amount: 50000
 
 deployment:
   intentjournal-app:
